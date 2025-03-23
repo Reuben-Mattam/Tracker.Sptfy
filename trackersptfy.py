@@ -7,15 +7,14 @@ from datetime import datetime
 from openpyxl import Workbook
 from dotenv import load_dotenv
 
-# Load environment variables
 load_dotenv()
 
-# Spotify API credentials from environment variables
+# API credentials from env variables
 SPOTIFY_CLIENT_ID = os.getenv('SPOTIFY_CLIENT_ID')
 SPOTIFY_CLIENT_SECRET = os.getenv('SPOTIFY_CLIENT_SECRET')
 SPOTIFY_REDIRECT_URI = os.getenv('SPOTIFY_REDIRECT_URI', 'http://localhost:8888/callback')
 
-# Initialize Spotify API client with user-read-playback-state scope
+# initialise spotify api client
 sp = spotipy.Spotify(auth_manager=SpotifyOAuth(
     client_id=SPOTIFY_CLIENT_ID,
     client_secret=SPOTIFY_CLIENT_SECRET,
@@ -23,7 +22,6 @@ sp = spotipy.Spotify(auth_manager=SpotifyOAuth(
     scope="user-read-currently-playing user-read-playback-state"
 ))
 
-# File to store data
 EXCEL_FILE = "spotify_songs.xlsx"
 
 def save_to_excel(song_data):
@@ -33,11 +31,11 @@ def save_to_excel(song_data):
     max_retries = 3
     retry_count = 0 
     
-    # Define column mappings for each sheet (updated to include Artist in tracks/albums)
+    # column mapping
     sheets = {
         "timestamp": ["Timestamp", "Track ID", "Album ID", "Artist ID", "Genres"],
-        "tracks": ["Song Name", "Track ID", "Song URL", "Track Image", "Artist"],  # Added Artist
-        "albums": ["Album", "Album ID", "Album Image", "Artist"],  # Added Artist
+        "tracks": ["Song Name", "Track ID", "Song URL", "Track Image", "Artist"],
+        "albums": ["Album", "Album ID", "Album Image", "Artist"],
         "artists": ["Artist", "Artist ID", "Artist Image"],
         "genres": ["Genre", "Count"]
     }
@@ -58,36 +56,28 @@ def save_to_excel(song_data):
                 existing_data = {sheet: pd.DataFrame(columns=columns) 
                     for sheet, columns in sheets.items()}
             
-            # Flag to track if any data can be saved
             can_save_any_sheet = False
             
-            # Prepare updated sheets
             updated_sheets = {}
             for sheet, columns in sheets.items():
-                # Special handling for genres sheet
                 if sheet == "genres":
-                    # Get all genres from the current song
                     song_genres = song_data.get("Genres", [])
                     
-                    # Prepare genres sheet
                     if "genres" not in existing_data:
                         genres_df = pd.DataFrame(columns=["Genre", "Count"])
                         existing_data["genres"] = genres_df
                     
-                    # Update genre counts
                     genres_sheet = existing_data["genres"].copy()
                     for genre in song_genres:
-                        # Normalize genre (lowercase for consistent counting)
+                        # normalize genre
                         genre = genre.lower().strip()
                         
-                        # Check if genre exists
                         genre_exists = genres_sheet[genres_sheet["Genre"] == genre]
-                        
                         if not genre_exists.empty:
-                            # Increment count for existing genre
+                            # increment count for existing genre
                             genres_sheet.loc[genres_sheet["Genre"] == genre, "Count"] += 1
                         else:
-                            # Add new genre with count 1
+                            # add new genre
                             new_genre_row = pd.DataFrame({"Genre": [genre], "Count": [1]})
                             genres_sheet = pd.concat([genres_sheet, new_genre_row], ignore_index=True)
                     
@@ -95,32 +85,27 @@ def save_to_excel(song_data):
                     can_save_any_sheet = True
                     continue
                 
-                # Regular sheet processing for other sheets
-                # Extract the relevant columns for the current sheet
                 new_row = pd.DataFrame([{col: song_data[col] for col in columns}])
                 
-                # Check for duplicates based on primary key
+
                 primary_key = primary_keys[sheet]
                 
-                # Check if the primary key already exists
+
                 if sheet in existing_data:
                     is_duplicate = existing_data[sheet][primary_key].eq(new_row[primary_key].iloc[0]).any()
                     
                     if not is_duplicate:
-                        # Concatenate if not a duplicate
+                        # concatenate
                         updated_sheet = pd.concat([existing_data[sheet], new_row], ignore_index=True)
                         can_save_any_sheet = True
                     else:
-                        # Keep existing data if duplicate
                         updated_sheet = existing_data[sheet]
                 else:
-                    # If sheet doesn't exist, add new row
                     updated_sheet = new_row
                     can_save_any_sheet = True
                 
                 updated_sheets[sheet] = updated_sheet
             
-            # Only save if at least one sheet can be updated
             if can_save_any_sheet:
                 with pd.ExcelWriter(EXCEL_FILE, engine="openpyxl") as writer:
                     for sheet, df in updated_sheets.items():
@@ -149,7 +134,7 @@ def get_currently_playing():
         if current_track and current_track.get("item"):
             item = current_track["item"]
             
-            # Song details
+            # song details
             song_name = item["name"]
             track_id = item["id"]
             album_name = item["album"]["name"]
@@ -161,13 +146,13 @@ def get_currently_playing():
             progress_ms = current_track["progress_ms"]
             timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             
-            # Images and Genre !
+            # images and genre !
             track_image = item["album"]["images"][0]["url"] if item["album"]["images"] else None
             album_image = track_image
             artist_image = None
             genres = []
             
-            # Fetch artist image and genres
+            # fetch artist image and genres
             if artist_id_list:
                 try:
                     artist_response = sp.artist(artist_id_list[0])
@@ -206,25 +191,23 @@ def main():
     
     while True:
         try:
-            # Get the currently playing song
+            # get the current song
             song = get_currently_playing()
             
             if song:
-                # Detect if a new song is playing or if the same song has restarted
+                # check if new song or not
                 is_new_song = last_song != song["Song Name"]
                 has_restarted = (song["Progress"] is not None and 
-                song["Progress"] < 2000)  # Less than 2 seconds
+                song["Progress"] < 2000)
                 
                 if is_new_song or has_restarted:
                     save_to_excel(song)
                     print(f"Recorded: {song['Song Name']} by {song['Artist']} "
                         f"at {song['Timestamp']}")
                     
-                    # Update tracking variables
                     last_song = song["Song Name"]
                     last_progress = song["Progress"]
             
-            # Wait before checking again
             time.sleep(10)
             
         except KeyboardInterrupt:
