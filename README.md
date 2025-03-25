@@ -1,6 +1,6 @@
-# tracker.sptfy
+# Tracker.Sptfy
 Spotify Music Tracker  
-To use this program to track your own stats, you need to set up a Spotify for Developer's app to access the web API. You can do so here: https://developer.spotify.com/dashboard.  
+To use this program to track your own spotify stats, you need to set up a Spotify for Developer's app to access the web API. You can do so here: https://developer.spotify.com/dashboard.  
 From there, you will need to set up a .env file with the following credentials
 
 SPOTIFY_CLIENT_ID=  
